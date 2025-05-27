@@ -1,0 +1,206 @@
+:root {
+    --primary: #4a6fa5;
+    --danger: #e74c3c;
+    --success: #2ecc71;
+    --dark: #34495e;
+    --light: #ecf0f1;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  
+  body {
+    background-color: #f5f7fa;
+    color: var(--dark);
+    line-height: 1.6;
+    padding: 20px;
+  }
+  
+  .container {
+    max-width: 800px;
+    margin: 40px auto;
+    background-color: white;
+    border-radius: 10px;
+    padding: 30px;
+    box-shadow: var(--shadow);
+  }
+  
+  h1 {
+    color: var(--primary);
+    text-align: center;
+    margin-bottom: 30px;
+    font-weight: 700;
+    font-size: 2.5rem;
+  }
+  
+  .shield-icon {
+    display: block;
+    margin: 0 auto 20px;
+    width: 80px;
+    height: 80px;
+    fill: var(--primary);
+  }
+  
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 30px;
+  }
+  
+  .domain-input-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  label {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--dark);
+  }
+  
+  .input-container {
+    display: flex;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  }
+  
+  input[type="text"] {
+    flex-grow: 1;
+    padding: 15px;
+    border: 2px solid #ddd;
+    border-right: none;
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s;
+  }
+  
+  input[type="text"]:focus {
+    border-color: var(--primary);
+  }
+  
+  button {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    transition: background-color 0.3s;
+  }
+  
+  button:hover {
+    background-color: #3d5c8c;
+  }
+  
+  .result {
+    margin-top: 30px;
+    padding: 20px;
+    border-radius: 6px;
+    display: none;
+    animation: fadeIn 0.5s ease-in;
+  }
+  
+  .result h3 {
+    margin-bottom: 10px;
+    font-size: 1.2rem;
+  }
+  
+  .result-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+  
+  .result-icon {
+    font-size: 2.5rem;
+  }
+  
+  .result-message {
+    font-size: 1.25rem;
+    font-weight: 500;
+  }
+  
+  .phishing {
+    background-color: rgba(231, 76, 60, 0.1);
+    border-left: 5px solid var(--danger);
+  }
+  
+  .legitimate {
+    background-color: rgba(46, 204, 113, 0.1);
+    border-left: 5px solid var(--success);
+  }
+  
+  .unknown {
+    background-color: rgba(241, 196, 15, 0.1);
+    border-left: 5px solid #f1c40f;
+  }
+  
+  .loading {
+    display: none;
+    text-align: center;
+    margin: 20px 0;
+  }
+  
+  .spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-left-color: var(--primary);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    margin: 0 auto 15px;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  footer {
+    text-align: center;
+    margin-top: 40px;
+    color: #7f8c8d;
+    font-size: 0.9rem;
+  }
+  
+  @media (max-width: 600px) {
+    .container {
+      padding: 20px;
+      margin: 20px auto;
+    }
+    
+    h1 {
+      font-size: 2rem;
+    }
+    
+    .input-container {
+      flex-direction: column;
+    }
+    
+    input[type="text"] {
+      border-right: 2px solid #ddd;
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+    }
+    
+    button {
+      border-radius: 0 0 6px 6px;
+    }
+  }

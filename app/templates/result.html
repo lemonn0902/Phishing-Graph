@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Domain Security Check - Results</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      padding: 40px;
+      max-width: 800px;
+      width: 100%;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #4CAF50, #2196F3, #FF9800, #F44336);
+    }
+
+    .icon {
+      font-size: 4rem;
+      margin-bottom: 20px;
+      display: block;
+    }
+
+    .safe { color: #4CAF50; }
+    .warning { color: #FF9800; }
+    .danger { color: #F44336; }
+
+    h2 {
+      color: #333;
+      margin-bottom: 20px;
+      font-size: 1.8rem;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .domain {
+      background: #f8f9fa;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      color: #495057;
+      font-weight: bold;
+      display: inline-block;
+      margin: 0 4px;
+      border-left: 4px solid #007bff;
+    }
+
+    p {
+      color: #666;
+      font-size: 1.1rem;
+      line-height: 1.6;
+      margin-bottom: 25px;
+    }
+
+    .suggestion-box {
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+      border-left: 4px solid #f39c12;
+    }
+
+    .suggestion-domain {
+      background: #e8f5e8;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      color: #2d5016;
+      font-weight: bold;
+      font-size: 1.2rem;
+      margin: 15px 0;
+      border-left: 4px solid #4CAF50;
+    }
+
+    /* Entropy and DGA analysis styles */
+    .analysis-section {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 25px 0;
+      border: 1px solid #dee2e6;
+    }
+
+    .analysis-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+
+    .metric-card {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid #e9ecef;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .metric-label {
+      font-size: 0.9rem;
+      color: #6c757d;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .metric-value {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #495057;
+    }
+
+    .entropy-indicator {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .entropy-low {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+
+    .entropy-medium {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .entropy-high {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .dga-risk {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .risk-indicator {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .risk-low {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .risk-medium {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .risk-high {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    /* Info section styles */
+    .info-section {
+      text-align: left;
+      margin: 20px auto;
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.05);
+    }
+
+    .info-section h3 {
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .info-section ul {
+      padding-left: 20px;
+      color: #444;
+    }
+
+    .info-section li {
+      margin-bottom: 5px;
+    }
+
+    .dns-status {
+      display: inline-block;
+      margin-right: 10px;
+    }
+
+    .dns-warning {
+      background: #ffebee;
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 10px;
+      border-left: 3px solid #f44336;
+    }
+
+    .risk-score {
+      font-weight: bold;
+      font-size: 1.2rem;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 14px 28px;
+      background: linear-gradient(45deg, #4CAF50, #45a049);
+      color: white;
+      text-decoration: none;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+      margin: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+    }
+
+    .btn-secondary {
+      background: linear-gradient(45deg, #6c757d, #5a6268);
+      box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+    }
+
+    .btn-secondary:hover {
+      box-shadow: 0 6px 20px rgba(108, 117, 125, 0.4);
+    }
+
+    .btn-analytics {
+      background: linear-gradient(45deg, #2196F3, #1976D2);
+      box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+    }
+
+    .btn-analytics:hover {
+      box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 15px;
+    }
+
+    .badge-safe {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .badge-warning {
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeaa7;
+    }
+
+    .badge-info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #ddd, transparent);
+      margin: 30px 0;
+    }
+
+    .button-group {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 30px 20px;
+        margin: 10px;
+      }
+
+      h2 {
+        font-size: 1.5rem;
+      }
+
+      .icon {
+        font-size: 3rem;
+      }
+
+      .btn {
+        padding: 12px 24px;
+        font-size: 1rem;
+      }
+
+      .button-group {
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .metrics-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    {% set score = risk_score | default(0) %}
+    {% if score >= 4 %}
+      {% set risk_class = 'risk-high' %}
+    {% elif score >= 2 %}
+      {% set risk_class = 'risk-medium' %}
+    {% else %}
+      {% set risk_class = 'risk-low' %}
+    {% endif %}
+
+    {% if safe %}
+      <div class="icon safe">🛡️</div>
+      <div class="status-badge badge-safe">Verified Safe</div>
+      <h2>The domain <span class="domain">{{ domain }}</span> is safe and trusted.</h2>
+      
+      {% if risk_score is defined %}
+      <p>
+          <strong>🔢 Risk Score:</strong>
+          <span class="risk-score {{ risk_class }}">{{ risk_score }}/10</span>
+      </p>
+      {% endif %}
+
+      <p>This domain is found in our list of verified legitimate websites. You can proceed with confidence.</p>
+    
+    {% elif flagged and suggestion %}
+      <div class="icon warning">⚠️</div>
+      <div class="status-badge badge-warning">Suspicious Domain</div>
+      <h2>The domain <span class="domain">{{ domain }}</span> appears suspicious.</h2>
+      
+      {% if risk_score is defined %}
+      <p>
+          <strong>🔢 Risk Score:</strong>
+          <span class="risk-score {{ risk_class }}">{{ risk_score }}/10</span>
+      </p>
+      {% endif %}
+
+      <div class="suggestion-box">
+        <p><strong>🤔 Did you mean to visit:</strong></p>
+        <div class="suggestion-domain">{{ suggestion }}</div>
+        <a href="https://{{ suggestion }}" target="_blank" class="btn">
+          🔗 Go to {{ suggestion }}
+        </a>
+      </div>
+    
+    {% elif flagged and not suggestion %}
+      <div class="icon danger">🚨</div>
+      <div class="status-badge badge-warning">Potentially Dangerous</div>
+      <h2>The domain <span class="domain">{{ domain }}</span> may be suspicious.</h2>
+      
+      {% if risk_score is defined %}
+      <p>
+          <strong>🔢 Risk Score:</strong>
+          <span class="risk-score {{ risk_class }}">{{ risk_score }}/10</span>
+      </p>
+      {% endif %}
+
+      <p>We could not find a trusted match for this domain. Please exercise caution and verify the authenticity before proceeding.</p>
+    
+    {% else %}
+      <div class="icon">🔍</div>
+      <div class="status-badge badge-info">Unknown Domain</div>
+      <h2>The domain <span class="domain">{{ domain }}</span> is not flagged.</h2>
+      <p>However, it does not appear in our known trusted sites list either. Please verify the domain independently if you're unsure.</p>
+    {% endif %}
+
+    <!-- Entropy and DGA Analysis Section -->
+    {% if entropy is defined %}
+    <div class="analysis-section">
+      <div class="analysis-title">
+        🔬 Technical Analysis
+      </div>
+      
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Entropy Score</div>
+          <div class="metric-value">
+            {{ entropy }}
+            {% if entropy < 3.5 %}
+              <span class="entropy-indicator entropy-low">LOW</span>
+            {% elif entropy < 4.5 %}
+              <span class="entropy-indicator entropy-medium">MEDIUM</span>
+            {% else %}
+              <span class="entropy-indicator entropy-high">HIGH</span>
+            {% endif %}
+          </div>
+        </div>
+        
+        <div class="metric-card">
+          <div class="metric-label">DGA Risk Assessment</div>
+          <div class="dga-risk">
+            {% if entropy < 3.5 %}
+              <span class="risk-indicator risk-low">🟢 Low Risk</span>
+            {% elif entropy < 4.5 %}
+              <span class="risk-indicator risk-medium">🟡 Medium Risk</span>
+            {% else %}
+              <span class="risk-indicator risk-high">🔴 High Risk</span>
+            {% endif %}
+          </div>
+          <div style="font-size: 0.9rem; color: #6c757d; margin-top: 8px;">
+            {% if entropy < 3.5 %}
+              Appears to be human-readable
+            {% elif entropy < 4.5 %}
+              Moderately random structure
+            {% else %}
+              Highly random, possible DGA
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-top: 15px; font-size: 0.9rem; color: #6c757d; text-align: left;">
+        <strong>About Entropy Analysis:</strong><br>
+        • <strong>Low entropy (< 3.5):</strong> Typical human-readable domains<br>
+        • <strong>Medium entropy (3.5-4.5):</strong> Mixed patterns, requires attention<br>
+        • <strong>High entropy (> 4.5):</strong> Highly random, characteristic of DGA domains
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Analysis Details -->
+    {% if reasons %}
+      <div class="info-section">
+        <h3>🧠 Analysis Details</h3>
+        <ul>
+          {% for reason in reasons %}
+            <li>{{ reason }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <!-- SSL Certificate Info -->
+    {% if ssl %}
+      <div class="info-section">
+        <h3>🔐 SSL Certificate Info</h3>
+        <ul>
+          {% for k, v in ssl.items() %}
+            <li><strong>{{ k }}:</strong> {{ v }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <!-- WHOIS Info -->
+    {% if whois %}
+      <div class="info-section">
+        <h3>📄 WHOIS Info</h3>
+        <ul>
+          {% for k, v in whois.items() %}
+            <li><strong>{{ k }}:</strong> {{ v }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <!-- Redirect Chain Info -->
+    {% if redirect_info %}
+      <div class="info-section">
+        <h3>🔄 Redirect Chain</h3>
+        <p><strong>Number of Redirects:</strong> {{ redirect_info.num_redirects }}</p>
+        <p><strong>Redirect Path:</strong></p>
+        <ul>
+          {% for domain in redirect_info.domain_chain %}
+            <li>{{ domain }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <!-- DNS Analysis -->
+    {% if dns %}
+      <div class="info-section">
+        <h3>🌐 DNS Analysis</h3>
+        {% if dns.a_records %}
+          <p><strong>IP Addresses:</strong> {{ dns.a_records | join(', ') }}</p>
+        {% endif %}
+        {% if dns.mx_records %}
+          <p><strong>Mail Servers:</strong> {{ dns.mx_records | join(', ') }}</p>
+        {% endif %}
+        {% if dns.ns_records %}
+          <p><strong>Name Servers:</strong> {{ dns.ns_records | join(', ') }}</p>
+        {% endif %}
+        <p><strong>SPF Record:</strong> <span class="dns-status">{{ '✅ Found' if dns.has_spf else '❌ Missing' }}</span></p>
+        <p><strong>DMARC Record:</strong> <span class="dns-status">{{ '✅ Found' if dns.has_dmarc else '❌ Missing' }}</span></p>
+        {% if dns.suspicious_patterns %}
+          <div class="dns-warning">
+            <strong>⚠️ Suspicious DNS Patterns:</strong>
+            <ul style="margin-top:5px;">
+              {% for pattern in dns.suspicious_patterns %}
+                <li>{{ pattern }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <div class="divider"></div>
+    
+    <div class="button-group">
+      <a href="/" class="btn btn-secondary">
+        🔄 Check Another Domain
+      </a>
+      <a href="/analytics" class="btn btn-analytics">
+        📊 View Analytics
+      </a>
+    </div>
+  </div>
+</body>
+</html>
