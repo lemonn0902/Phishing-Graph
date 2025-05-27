@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bulk Domain Check - Results</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #333;
+      padding: 40px;
+      margin: 0;
+    }
+
+    .container {
+      background: #fff;
+      border-radius: 12px;
+      max-width: 1000px;
+      margin: auto;
+      padding: 30px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
+
+    th, td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+      text-align: center;
+    }
+
+    th {
+      background: #f5f5f5;
+    }
+
+    .safe {
+      color: green;
+      font-weight: bold;
+    }
+
+    .flagged {
+      color: #f39c12;
+      font-weight: bold;
+    }
+
+    .danger {
+      color: #e74c3c;
+      font-weight: bold;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 14px 28px;
+      background: linear-gradient(45deg, #2196F3, #1976D2);
+      color: white;
+      text-decoration: none;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      text-align: center;
+    }
+
+    .btn:hover {
+      box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+    }
+
+    .center {
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Bulk Domain Security Check Results</h1>
+    <table>
+      <thead>
+        <tr>
+          <th>Domain</th>
+          <th>Status</th>
+          <th>Risk Score</th>
+          <th>Entropy</th>
+          <th>Suggestion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in results %}
+        <tr>
+          <td>{{ item.domain }}</td>
+          <td class="{{ 'safe' if item.safe else 'flagged' if item.suggestion else 'danger' }}">
+            {% if item.safe %}
+              🛡️ Safe
+            {% elif item.suggestion %}
+              ⚠️ Suspicious
+            {% else %}
+              🚨 Dangerous
+            {% endif %}
+          </td>
+          <td>{{ item.risk_score }}/10</td>
+          <td>{{ item.entropy }}</td>
+          <td>{{ item.suggestion if item.suggestion else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="center">
+      <a href="/" class="btn">🔄 Check Another Domain</a>
+    </div>
+  </div>
+</body>
+</html>

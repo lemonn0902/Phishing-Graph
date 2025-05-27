@@ -558,6 +558,23 @@
         {% endif %}
       </div>
     {% endif %}
+    
+    <div class="divider"></div>
+
+    <div class="form-container" style="margin-top: 40px;">
+      <h3 style="margin-bottom: 10px; color: #333;">Want to check multiple websites?</h3>
+      <form action="/bulk-check" method="POST">
+        <textarea 
+          name="urls" 
+          rows="5" 
+          placeholder="Enter one domain per line (e.g., example.com)" 
+          style="width: 100%; padding: 16px; font-size: 1rem; border-radius: 10px; border: 1px solid #ccc; resize: vertical;"
+          required
+        ></textarea>
+        <br><br>
+        <button type="submit" class="btn btn-analytics">🚀 Check Multiple Domains</button>
+      </form>
+    </div>
 
     <div class="divider"></div>
     

@@ -170,12 +170,50 @@ def phishing_stats():
         return jsonify(stats)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@app.route('/bulk-check', methods=['POST'])
+def bulk_check():
+    raw_input = request.form['urls']
+    domain_list = [line.strip().lower().replace('http://', '').replace('https://', '').replace('www.', '') 
+                   for line in raw_input.splitlines() if line.strip()]
+    
+    results = []
+
+    for domain in domain_list:
+        entropy_score = calculate_entropy(domain)
+        ssl_info = fetch_ssl_info(domain)
+        whois_info = fetch_whois_info(domain)
+        dns_info = fetch_dns_info(domain)
+        redirect_info = check_redirect_chain(domain)
+        risk_score, reasons = score_domain_risk(ssl_info, whois_info, dns_info, redirect_info)
+
+        best_match, lev, jac = get_best_match(domain, legit_domains)
+
+        flagged = domain not in legit_domains and (risk_score >= 2 or best_match)
+
+        results.append({
+            'domain': domain,
+            'safe': not flagged,
+            'flagged': flagged,
+            'suggestion': best_match,
+            'ssl': ssl_info,
+            'whois': whois_info,
+            'dns': dns_info,
+            'redirect_info': redirect_info,
+            'risk_score': risk_score,
+            'reasons': reasons,
+            'entropy': entropy_score,
+        })
+
+    return render_template('bulk_results.html', results=results)
+
 
 # Cleanup Neo4j connection when app shuts down
 @app.teardown_appcontext
 def close_neo4j(error):
     if driver:
         driver.close()
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=8000)
