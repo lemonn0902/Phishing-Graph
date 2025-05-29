@@ -5,7 +5,7 @@ import os
 # Set your Neo4j credentials here - use environment variables for security
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "your_password")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
 
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
