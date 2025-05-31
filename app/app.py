@@ -27,7 +27,7 @@ def jaccard_similarity(str1, str2, n=3):
     set1, set2 = ngrams(str1, n), ngrams(str2, n)
     return len(set1 & set2) / len(set1 | set2) if set1 | set2 else 0
 
-def get_best_match(user_input, legit_domains, lev_thresh=5, jac_thresh=0.4):
+def get_best_match(user_input, legit_domains, lev_thresh=3, jac_thresh=0.8):
     best_match = None
     best_score = float('inf')
     best_lev = None
@@ -37,7 +37,7 @@ def get_best_match(user_input, legit_domains, lev_thresh=5, jac_thresh=0.4):
         lev = levenshtein_distance(user_input, legit)
         jac = jaccard_similarity(user_input, legit)
         
-        if lev <= lev_thresh or jac >= jac_thresh:
+        if lev <= lev_thresh and jac >= jac_thresh:
             score = lev - jac  # prioritize smaller edit and higher overlap
             if score < best_score:
                 best_score = score
@@ -77,7 +77,7 @@ def check():
         ssl_info = fetch_ssl_info(clean_input)
         whois_info = fetch_whois_info(clean_input)
         dns_info = fetch_dns_info(clean_input)
-        risk_score, reasons = score_domain_risk(ssl_info, whois_info, dns_info)
+        risk_score, reasons = score_domain_risk(ssl_info, whois_info, dns_info, None, entropy_score)
         
         return render_template('result.html',
                               flagged=False,
@@ -95,15 +95,25 @@ def check():
     ssl_info = fetch_ssl_info(clean_input)
     whois_info = fetch_whois_info(clean_input)
     dns_info = fetch_dns_info(clean_input)
-    risk_score, reasons = score_domain_risk(ssl_info, whois_info, dns_info)
+    redirect_info = check_redirect_chain(clean_input)
+    risk_score, reasons = score_domain_risk(ssl_info, whois_info, dns_info, redirect_info, entropy_score)
 
     is_suspicious = False
     
-    if best_match or risk_score >= 2:
+    # Updated thresholds and logic
+    if best_match:
+        is_suspicious = True
+    elif risk_score >= 3.5:  # Lower threshold from 4 to 3.5
+        is_suspicious = True
+        # Additional checks for medium-risk domains
+        if (entropy_score > 3.5 or  # Suspicious entropy
+            not dns_info.get("has_spf") or  # Missing SPF
+            not dns_info.get("has_dmarc")):  # Missing DMARC
+            is_suspicious = True
+    
+    if is_suspicious:
         # Log the phishing attempt to Neo4j
         try:
-            is_suspicious = True
-            redirect_info = check_redirect_chain(clean_input)
             add_phishing_match(clean_input, best_match, lev_distance, jac_score, ssl_info, whois_info, risk_score, reasons, redirect_info)
             print(f"Logged phishing attempt: {clean_input} -> {best_match}")
         except Exception as e:
@@ -185,11 +195,11 @@ def bulk_check():
         whois_info = fetch_whois_info(domain)
         dns_info = fetch_dns_info(domain)
         redirect_info = check_redirect_chain(domain)
-        risk_score, reasons = score_domain_risk(ssl_info, whois_info, dns_info, redirect_info)
+        risk_score, reasons = score_domain_risk(ssl_info, whois_info, dns_info, redirect_info, entropy_score)
 
         best_match, lev, jac = get_best_match(domain, legit_domains)
 
-        flagged = domain not in legit_domains and (risk_score >= 2 or best_match)
+        flagged = domain not in legit_domains and (risk_score >= 4 or best_match)
 
         results.append({
             'domain': domain,

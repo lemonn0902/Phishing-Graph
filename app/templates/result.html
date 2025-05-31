@@ -359,168 +359,235 @@
         grid-template-columns: 1fr;
       }
     }
+
+    /* Add styles for collapsible sections */
+    .collapsible {
+      background: #f8f9fa;
+      border-radius: 12px;
+      margin: 15px 0;
+      overflow: hidden;
+    }
+
+    .collapsible-header {
+      background: #fff;
+      padding: 15px 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid #dee2e6;
+      border-radius: 12px;
+      transition: all 0.3s ease;
+    }
+
+    .collapsible-header:hover {
+      background: #f8f9fa;
+    }
+
+    .collapsible-header h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: #495057;
+    }
+
+    .collapsible-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-top: none;
+      border-radius: 0 0 12px 12px;
+    }
+
+    .collapsible.active .collapsible-header {
+      border-radius: 12px 12px 0 0;
+      border-bottom: none;
+    }
+
+    .collapsible.active .collapsible-content {
+      max-height: 1000px;
+      padding: 20px;
+    }
+
+    .toggle-icon {
+      font-size: 1.2rem;
+      transition: transform 0.3s ease;
+    }
+
+    .collapsible.active .toggle-icon {
+      transform: rotate(180deg);
+    }
+
+    /* Always visible section */
+    .always-visible {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .risk-score-display {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #495057;
+      margin: 10px 0;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    {% set score = risk_score | default(0) %}
-    {% if score >= 4 %}
-      {% set risk_class = 'risk-high' %}
-    {% elif score >= 2 %}
-      {% set risk_class = 'risk-medium' %}
-    {% else %}
-      {% set risk_class = 'risk-low' %}
-    {% endif %}
-
-    {% if safe %}
-      <div class="icon safe">🛡️</div>
-      <div class="status-badge badge-safe">Verified Safe</div>
-      <h2>The domain <span class="domain">{{ domain }}</span> is safe and trusted.</h2>
-      
-      {% if risk_score is defined %}
-      <p>
-          <strong>🔢 Risk Score:</strong>
-          <span class="risk-score {{ risk_class }}">{{ risk_score }}/10</span>
-      </p>
+    <!-- Always visible section -->
+    <div class="always-visible">
+      {% set score = risk_score | default(0) %}
+      {% if score >= 4 %}
+        {% set risk_class = 'risk-high' %}
+      {% elif score >= 2 %}
+        {% set risk_class = 'risk-medium' %}
+      {% else %}
+        {% set risk_class = 'risk-low' %}
       {% endif %}
 
-      <p>This domain is found in our list of verified legitimate websites. You can proceed with confidence.</p>
-    
-    {% elif flagged and suggestion %}
-      <div class="icon warning">⚠️</div>
-      <div class="status-badge badge-warning">Suspicious Domain</div>
-      <h2>The domain <span class="domain">{{ domain }}</span> appears suspicious.</h2>
-      
-      {% if risk_score is defined %}
-      <p>
-          <strong>🔢 Risk Score:</strong>
-          <span class="risk-score {{ risk_class }}">{{ risk_score }}/10</span>
-      </p>
+      {% if safe %}
+        <div class="icon safe">🛡️</div>
+        <div class="status-badge badge-safe">Verified Safe</div>
+        <h2>The domain <span class="domain">{{ domain }}</span> is safe and trusted.</h2>
+      {% elif flagged and suggestion %}
+        <div class="icon warning">⚠️</div>
+        <div class="status-badge badge-warning">Suspicious Domain</div>
+        <h2>The domain <span class="domain">{{ domain }}</span> appears suspicious.</h2>
+      {% elif flagged and not suggestion %}
+        <div class="icon danger">🚨</div>
+        <div class="status-badge badge-warning">Potentially Dangerous</div>
+        <h2>The domain <span class="domain">{{ domain }}</span> may be suspicious.</h2>
+      {% else %}
+        <div class="icon">🔍</div>
+        <div class="status-badge badge-info">Unknown Domain</div>
+        <h2>The domain <span class="domain">{{ domain }}</span> is not flagged.</h2>
       {% endif %}
 
-      <div class="suggestion-box">
-        <p><strong>🤔 Did you mean to visit:</strong></p>
-        <div class="suggestion-domain">{{ suggestion }}</div>
-        <a href="https://{{ suggestion }}" target="_blank" class="btn">
-          🔗 Go to {{ suggestion }}
-        </a>
+      <div class="risk-score-display">
+        Risk Score: {{ risk_score }}/10
       </div>
-    
-    {% elif flagged and not suggestion %}
-      <div class="icon danger">🚨</div>
-      <div class="status-badge badge-warning">Potentially Dangerous</div>
-      <h2>The domain <span class="domain">{{ domain }}</span> may be suspicious.</h2>
-      
-      {% if risk_score is defined %}
-      <p>
-          <strong>🔢 Risk Score:</strong>
-          <span class="risk-score {{ risk_class }}">{{ risk_score }}/10</span>
-      </p>
+
+      {% if suggestion %}
+        <div class="suggestion-box">
+          <p><strong>🤔 Did you mean to visit:</strong></p>
+          <div class="suggestion-domain">{{ suggestion }}</div>
+          <a href="https://{{ suggestion }}" target="_blank" class="btn">
+            🔗 Go to {{ suggestion }}
+          </a>
+        </div>
       {% endif %}
+    </div>
 
-      <p>We could not find a trusted match for this domain. Please exercise caution and verify the authenticity before proceeding.</p>
-    
-    {% else %}
-      <div class="icon">🔍</div>
-      <div class="status-badge badge-info">Unknown Domain</div>
-      <h2>The domain <span class="domain">{{ domain }}</span> is not flagged.</h2>
-      <p>However, it does not appear in our known trusted sites list either. Please verify the domain independently if you're unsure.</p>
-    {% endif %}
-
-    <!-- Entropy and DGA Analysis Section -->
+    <!-- Collapsible Technical Analysis -->
     {% if entropy is defined %}
-    <div class="analysis-section">
-      <div class="analysis-title">
-        🔬 Technical Analysis
+    <div class="collapsible">
+      <div class="collapsible-header">
+        <h3>🔬 Technical Analysis</h3>
+        <span class="toggle-icon">▼</span>
       </div>
-      
-      <div class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-label">Entropy Score</div>
-          <div class="metric-value">
-            {{ entropy }}
-            {% if entropy < 3.5 %}
-              <span class="entropy-indicator entropy-low">LOW</span>
-            {% elif entropy < 4.5 %}
-              <span class="entropy-indicator entropy-medium">MEDIUM</span>
-            {% else %}
-              <span class="entropy-indicator entropy-high">HIGH</span>
-            {% endif %}
+      <div class="collapsible-content">
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">Entropy Score</div>
+            <div class="metric-value">
+              {{ entropy }}
+              {% if entropy < 3.5 %}
+                <span class="entropy-indicator entropy-low">LOW</span>
+              {% elif entropy < 4.5 %}
+                <span class="entropy-indicator entropy-medium">MEDIUM</span>
+              {% else %}
+                <span class="entropy-indicator entropy-high">HIGH</span>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="metric-card">
+            <div class="metric-label">DGA Risk Assessment</div>
+            <div class="dga-risk">
+              {% if entropy < 3.5 %}
+                <span class="risk-indicator risk-low">🟢 Low Risk</span>
+              {% elif entropy < 4.5 %}
+                <span class="risk-indicator risk-medium">🟡 Medium Risk</span>
+              {% else %}
+                <span class="risk-indicator risk-high">🔴 High Risk</span>
+              {% endif %}
+            </div>
           </div>
         </div>
         
-        <div class="metric-card">
-          <div class="metric-label">DGA Risk Assessment</div>
-          <div class="dga-risk">
-            {% if entropy < 3.5 %}
-              <span class="risk-indicator risk-low">🟢 Low Risk</span>
-            {% elif entropy < 4.5 %}
-              <span class="risk-indicator risk-medium">🟡 Medium Risk</span>
-            {% else %}
-              <span class="risk-indicator risk-high">🔴 High Risk</span>
-            {% endif %}
-          </div>
-          <div style="font-size: 0.9rem; color: #6c757d; margin-top: 8px;">
-            {% if entropy < 3.5 %}
-              Appears to be human-readable
-            {% elif entropy < 4.5 %}
-              Moderately random structure
-            {% else %}
-              Highly random, possible DGA
-            {% endif %}
-          </div>
+        <div style="margin-top: 15px; font-size: 0.9rem; color: #6c757d; text-align: left;">
+          <strong>About Entropy Analysis:</strong><br>
+          • <strong>Low entropy (< 3.5):</strong> Typical human-readable domains<br>
+          • <strong>Medium entropy (3.5-4.5):</strong> Mixed patterns, requires attention<br>
+          • <strong>High entropy (> 4.5):</strong> Highly random, characteristic of DGA domains
         </div>
-      </div>
-      
-      <div style="margin-top: 15px; font-size: 0.9rem; color: #6c757d; text-align: left;">
-        <strong>About Entropy Analysis:</strong><br>
-        • <strong>Low entropy (< 3.5):</strong> Typical human-readable domains<br>
-        • <strong>Medium entropy (3.5-4.5):</strong> Mixed patterns, requires attention<br>
-        • <strong>High entropy (> 4.5):</strong> Highly random, characteristic of DGA domains
       </div>
     </div>
     {% endif %}
 
-    <!-- Analysis Details -->
+    <!-- Collapsible Analysis Details -->
     {% if reasons %}
-      <div class="info-section">
+    <div class="collapsible">
+      <div class="collapsible-header">
         <h3>🧠 Analysis Details</h3>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="collapsible-content">
         <ul>
           {% for reason in reasons %}
             <li>{{ reason }}</li>
           {% endfor %}
         </ul>
       </div>
+    </div>
     {% endif %}
 
-    <!-- SSL Certificate Info -->
+    <!-- Collapsible SSL Certificate Info -->
     {% if ssl %}
-      <div class="info-section">
-        <h3>🔐 SSL Certificate Info</h3>
+    <div class="collapsible">
+      <div class="collapsible-header">
+        <h3>🔐 SSL Certificate Information</h3>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="collapsible-content">
         <ul>
           {% for k, v in ssl.items() %}
             <li><strong>{{ k }}:</strong> {{ v }}</li>
           {% endfor %}
         </ul>
       </div>
+    </div>
     {% endif %}
 
-    <!-- WHOIS Info -->
+    <!-- Collapsible WHOIS Info -->
     {% if whois %}
-      <div class="info-section">
-        <h3>📄 WHOIS Info</h3>
+    <div class="collapsible">
+      <div class="collapsible-header">
+        <h3>📄 WHOIS Information</h3>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="collapsible-content">
         <ul>
           {% for k, v in whois.items() %}
             <li><strong>{{ k }}:</strong> {{ v }}</li>
           {% endfor %}
         </ul>
       </div>
+    </div>
     {% endif %}
 
-    <!-- Redirect Chain Info -->
+    <!-- Collapsible Redirect Chain Info -->
     {% if redirect_info %}
-      <div class="info-section">
+    <div class="collapsible">
+      <div class="collapsible-header">
         <h3>🔄 Redirect Chain</h3>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="collapsible-content">
         <p><strong>Number of Redirects:</strong> {{ redirect_info.num_redirects }}</p>
         <p><strong>Redirect Path:</strong></p>
         <ul>
@@ -529,12 +596,17 @@
           {% endfor %}
         </ul>
       </div>
+    </div>
     {% endif %}
 
-    <!-- DNS Analysis -->
+    <!-- Collapsible DNS Analysis -->
     {% if dns %}
-      <div class="info-section">
+    <div class="collapsible">
+      <div class="collapsible-header">
         <h3>🌐 DNS Analysis</h3>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="collapsible-content">
         {% if dns.a_records %}
           <p><strong>IP Addresses:</strong> {{ dns.a_records | join(', ') }}</p>
         {% endif %}
@@ -557,8 +629,10 @@
           </div>
         {% endif %}
       </div>
+    </div>
     {% endif %}
-    
+
+    <!-- Always visible buttons -->
     <div class="divider"></div>
 
     <div class="form-container" style="margin-top: 40px;">
@@ -587,5 +661,20 @@
       </a>
     </div>
   </div>
+
+  <script>
+    // Add JavaScript for collapsible functionality
+    document.addEventListener('DOMContentLoaded', function() {
+      const collapsibles = document.querySelectorAll('.collapsible');
+      
+      collapsibles.forEach(collapsible => {
+        const header = collapsible.querySelector('.collapsible-header');
+        
+        header.addEventListener('click', () => {
+          collapsible.classList.toggle('active');
+        });
+      });
+    });
+  </script>
 </body>
 </html>

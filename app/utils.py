@@ -182,72 +182,118 @@ def check_redirect_chain(domain):
     
     return redirect_info
 
-def score_domain_risk(ssl_info, whois_info, dns_info=None, redirect_info=None):
-    score, reasons = 0, []
+def score_domain_risk(ssl_info, whois_info, dns_info=None, redirect_info=None, entropy=None):
+    """
+    Calculate domain risk score on a scale of 0-10
+    Returns tuple of (normalized_score, reasons)
+    """
+    base_score = 0
+    max_score = 10
+    reasons = []
 
-    # SSL Checks
+    # SSL Certificate Checks (25% weight)
+    ssl_score = 0
     if ssl_info.get("issuer"):
         if "self" in str(ssl_info["issuer"]).lower():
-            score += 1
-            reasons.append("Self-signed SSL certificate")
+            ssl_score += 3
+            reasons.append("Self-signed SSL certificate (High Risk)")
     else:
-        score += 0.5
-        reasons.append("No SSL certificate found")
+        ssl_score += 2
+        reasons.append("No SSL certificate found (Medium Risk)")
     
     if ssl_info.get("expires"):
         try:
             exp_date = datetime.strptime(ssl_info["expires"], "%b %d %H:%M:%S %Y %Z")
             days_left = (exp_date - datetime.utcnow()).days
             if days_left <= 30:
-                score += 1
-                reasons.append("SSL expires in ≤ 30 days")
+                ssl_score += 2
+                reasons.append("SSL expires in ≤ 30 days (Medium Risk)")
             elif days_left <= 90:
-                score += 0.5
-                reasons.append("SSL expires in ≤ 90 days")
+                ssl_score += 1
+                reasons.append("SSL expires in ≤ 90 days (Low Risk)")
         except Exception:
             pass
 
-    # WHOIS Checks
+    # WHOIS Checks (25% weight)
+    whois_score = 0
     if creation := whois_info.get("creation_date"):
         try:
             age_days = (datetime.utcnow() - datetime.strptime(creation[:10], "%Y-%m-%d")).days
             if age_days < 30:
-                score += 1
-                reasons.append("Domain registered < 30 days ago")
+                whois_score += 2.5
+                reasons.append("Domain registered < 30 days ago (High Risk)")
             elif age_days < 90:
-                score += 0.5
-                reasons.append("Domain registered < 90 days ago")
+                whois_score += 1.5
+                reasons.append("Domain registered < 90 days ago (Medium Risk)")
         except Exception:
             pass
     else:
-        score += 0.5
-        reasons.append("Domain creation date unavailable")
+        whois_score += 1.5
+        reasons.append("Domain creation date unavailable (Medium Risk)")
     
     if not whois_info.get("registrar"):
-        score += 0.5
-        reasons.append("Registrar information unavailable")
+        whois_score += 1
+        reasons.append("Registrar information unavailable (Low Risk)")
 
-    # DNS Checks
+    # DNS Checks (25% weight)
+    dns_score = 0
     if dns_info:
         checks = [
-            (not dns_info.get("a_records"), 1, "No A records found"),
-            (not dns_info.get("has_spf"), 0.3, "No SPF record"),
-            (not dns_info.get("has_dmarc"), 0.3, "No DMARC record"),
-            (not dns_info.get("ns_records"), 0.5, "No nameserver records found")
+            (not dns_info.get("a_records"), 2.5, "No A records found (High Risk)"),
+            (not dns_info.get("has_spf"), 1.5, "No SPF record (Medium Risk)"),
+            (not dns_info.get("has_dmarc"), 1.5, "No DMARC record (Medium Risk)"),
+            (not dns_info.get("ns_records"), 2, "No nameserver records found (High Risk)")
         ]
         
         for condition, penalty, reason in checks:
             if condition:
-                score += penalty
+                dns_score += penalty
                 reasons.append(reason)
         
         if suspicious := dns_info.get("suspicious_patterns"):
-            score += len(suspicious) * 0.5
-            reasons.extend(suspicious)
+            pattern_score = min(2.5, len(suspicious) * 0.8)  # Cap at 2.5
+            dns_score += pattern_score
+            reasons.extend(f"{pattern} (High Risk)" for pattern in suspicious)
 
-    # Redirect Check
+    # Entropy and Behavior Checks (25% weight)
+    behavior_score = 0
+    
+    # Check redirects
     if redirect_info and redirect_info.get("flagged"):
-        score += 0.5
-        reasons.append("Multiple redirects detected")
+        behavior_score += 1.5
+        reasons.append("Multiple redirects detected (Medium Risk)")
+        
+        # Additional check for redirect chain length
+        if redirect_info.get("num_redirects", 0) > 3:
+            behavior_score += 1.5
+            reasons.append("Long redirect chain detected (High Risk)")
 
-    return round(score, 1), reasons
+    # Include entropy in scoring if provided
+    if entropy is not None:
+        if entropy > 4.5:
+            behavior_score += 2.5
+            reasons.append("High domain entropy - possible DGA (High Risk)")
+        elif entropy > 3.5:
+            behavior_score += 1.5
+            reasons.append("Medium domain entropy - unusual pattern (Medium Risk)")
+
+    # Calculate weighted scores (all components now 25%)
+    weighted_score = (
+        (ssl_score / 3) * 2.5 +      # SSL (25%)
+        (whois_score / 2.5) * 2.5 +  # WHOIS (25%)
+        (dns_score / 2.5) * 2.5 +    # DNS (25%)
+        (behavior_score / 2.5) * 2.5  # Behavior & Entropy (25%)
+    )
+
+    # Normalize to 0-10 scale
+    final_score = min(10, weighted_score)
+    
+    # Add risk level to reasons
+    if final_score >= 6:
+        reasons.insert(0, "⚠️ HIGH RISK DOMAIN")
+    elif final_score >= 3.5:
+        reasons.insert(0, "⚡ MEDIUM RISK DOMAIN")
+    else:
+        reasons.insert(0, "ℹ️ LOW RISK DOMAIN")
+
+    return round(final_score, 1), reasons
