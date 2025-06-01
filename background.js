@@ -1,0 +1,266 @@
+// Load legitimate domains list
+let legitDomains = [];
+fetch(chrome.runtime.getURL('data/legit_domains.txt'))
+  .then(response => response.text())
+  .then(text => {
+    legitDomains = text.split('\n').map(d => d.trim().toLowerCase()).filter(Boolean);
+  });
+
+// Utility functions from utils.py converted to JavaScript
+function calculateEntropy(domain) {
+  if (!domain) return 0;
+  const freq = {};
+  for (const char of domain) {
+    freq[char] = (freq[char] || 0) + 1;
+  }
+  const entropy = -Object.values(freq).reduce((sum, f) => {
+    const p = f / domain.length;
+    return sum + p * Math.log2(p);
+  }, 0);
+  return Math.round(entropy * 1000) / 1000;
+}
+
+function levenshteinDistance(str1, str2) {
+  const m = str1.length;
+  const n = str2.length;
+  const dp = Array(m + 1).fill().map(() => Array(n + 1).fill(0));
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (str1[i - 1] === str2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(
+          dp[i - 1][j],
+          dp[i][j - 1],
+          dp[i - 1][j - 1]
+        );
+      }
+    }
+  }
+  return dp[m][n];
+}
+
+function jaccardSimilarity(str1, str2, n = 3) {
+  function getNGrams(s, n) {
+    const ngrams = new Set();
+    for (let i = 0; i <= s.length - n; i++) {
+      ngrams.add(s.slice(i, i + n));
+    }
+    return ngrams;
+  }
+  
+  const set1 = getNGrams(str1, n);
+  const set2 = getNGrams(str2, n);
+  
+  const intersection = new Set([...set1].filter(x => set2.has(x)));
+  const union = new Set([...set1, ...set2]);
+  
+  return union.size ? intersection.size / union.size : 0;
+}
+
+function getBestMatch(userInput, legitDomains, levThresh = 3, jacThresh = 0.8) {
+  let bestMatch = null;
+  let bestScore = Infinity;
+  let bestLev = null;
+  let bestJac = null;
+  
+  for (const legit of legitDomains) {
+    const lev = levenshteinDistance(userInput, legit);
+    const jac = jaccardSimilarity(userInput, legit);
+    
+    if (lev <= levThresh && jac >= jacThresh) {
+      const score = lev - jac;
+      if (score < bestScore) {
+        bestScore = score;
+        bestMatch = legit;
+        bestLev = lev;
+        bestJac = jac;
+      }
+    }
+  }
+  
+  return { bestMatch, bestLev, bestJac };
+}
+
+async function checkDNSRecords(domain) {
+  const dnsInfo = {
+    hasSpf: false,
+    hasDmarc: false,
+    hasNS: false,
+    hasA: false
+  };
+
+  try {
+    // Check A record
+    const aResponse = await fetch(`https://dns.google/resolve?name=${domain}&type=A`);
+    const aData = await aResponse.json();
+    dnsInfo.hasA = aData.Answer && aData.Answer.length > 0;
+
+    // Check NS records
+    const nsResponse = await fetch(`https://dns.google/resolve?name=${domain}&type=NS`);
+    const nsData = await nsResponse.json();
+    dnsInfo.hasNS = nsData.Answer && nsData.Answer.length > 0;
+
+    // Check TXT records for SPF and DMARC
+    const txtResponse = await fetch(`https://dns.google/resolve?name=${domain}&type=TXT`);
+    const txtData = await txtResponse.json();
+    if (txtData.Answer) {
+      for (const record of txtData.Answer) {
+        const txt = record.data.toLowerCase();
+        if (txt.includes('v=spf1')) {
+          dnsInfo.hasSpf = true;
+        }
+      }
+    }
+
+    // Check DMARC record
+    const dmarcResponse = await fetch(`https://dns.google/resolve?name=_dmarc.${domain}&type=TXT`);
+    const dmarcData = await dmarcResponse.json();
+    if (dmarcData.Answer) {
+      for (const record of dmarcData.Answer) {
+        const txt = record.data.toLowerCase();
+        if (txt.includes('v=dmarc1')) {
+          dnsInfo.hasDmarc = true;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('DNS check error:', error);
+  }
+
+  return dnsInfo;
+}
+
+async function checkRedirects(domain) {
+  const redirectInfo = {
+    numRedirects: 0,
+    redirectChain: [],
+    flagged: false
+  };
+
+  try {
+    const response = await fetch(`https://${domain}`, {
+      redirect: 'follow',
+    });
+    
+    if (response.redirected) {
+      redirectInfo.flagged = true;
+      redirectInfo.numRedirects = response.url !== `https://${domain}` ? 1 : 0;
+      redirectInfo.redirectChain = [domain, new URL(response.url).hostname];
+    }
+  } catch (error) {
+    console.error('Redirect check error:', error);
+  }
+
+  return redirectInfo;
+}
+
+async function checkDomain(domain) {
+  const cleanDomain = domain.toLowerCase();
+  const entropyScore = calculateEntropy(cleanDomain);
+  
+  // Initialize risk assessment with weighted components
+  let sslScore = 0;
+  let dnsScore = 0;
+  let behaviorScore = 0;
+  const reasons = [];
+  
+  // Check if domain is in legitimate list
+  if (legitDomains.includes(cleanDomain)) {
+    reasons.push("Domain is in trusted list");
+    return { riskScore: 0, reasons };
+  }
+  
+  // Check for similarity with legitimate domains (25% weight)
+  const { bestMatch } = getBestMatch(cleanDomain, legitDomains);
+  if (bestMatch) {
+    behaviorScore += 2.5;
+    reasons.push(`Similar to legitimate domain: ${bestMatch}`);
+  }
+
+  // DNS Checks (25% weight)
+  const dnsInfo = await checkDNSRecords(cleanDomain);
+  if (!dnsInfo.hasSpf) {
+    dnsScore += 1.5;
+    reasons.push("No SPF record (Medium Risk)");
+  }
+  if (!dnsInfo.hasDmarc) {
+    dnsScore += 1.5;
+    reasons.push("No DMARC record (Medium Risk)");
+  }
+  if (!dnsInfo.hasNS) {
+    dnsScore += 2.5;
+    reasons.push("No nameserver records found (High Risk)");
+  }
+  if (!dnsInfo.hasA) {
+    dnsScore += 2.5;
+    reasons.push("No A records found (High Risk)");
+  }
+  
+  // Check SSL certificate (25% weight)
+  try {
+    const response = await fetch(`https://${cleanDomain}`);
+    const cert = response.headers.get('server-timing');
+    if (!cert) {
+      sslScore += 2;
+      reasons.push("No SSL certificate found (Medium Risk)");
+    }
+  } catch {
+    sslScore += 3;
+    reasons.push("SSL verification failed (High Risk)");
+  }
+  
+  // Check domain entropy and redirects (25% weight)
+  if (entropyScore > 4.5) {
+    behaviorScore += 2.5;
+    reasons.push("High domain entropy - possible DGA (High Risk)");
+  } else if (entropyScore > 3.5) {
+    behaviorScore += 1.5;
+    reasons.push("Medium domain entropy - unusual pattern (Medium Risk)");
+  }
+
+  // Check redirects
+  const redirectInfo = await checkRedirects(cleanDomain);
+  if (redirectInfo.flagged) {
+    behaviorScore += 1.5;
+    reasons.push("Multiple redirects detected (Medium Risk)");
+    if (redirectInfo.numRedirects > 3) {
+      behaviorScore += 1.5;
+      reasons.push("Long redirect chain detected (High Risk)");
+    }
+  }
+
+  // Calculate final weighted score
+  const riskScore = Math.min(10, (
+    (sslScore / 3) * 2.5 +      // SSL (25%)
+    (dnsScore / 2.5) * 2.5 +    // DNS (25%)
+    (behaviorScore / 2.5) * 2.5  // Behavior & Entropy (25%)
+  ));
+  
+  // Add risk level to reasons without emoji (will be added in popup)
+  if (riskScore >= 7) {
+    reasons.unshift("HIGH RISK DOMAIN");
+  } else if (riskScore >= 4) {
+    reasons.unshift("MEDIUM RISK DOMAIN");
+  } else {
+    reasons.unshift("LOW RISK DOMAIN");
+  }
+  
+  return {
+    riskScore: Math.round(riskScore * 10) / 10,
+    reasons
+  };
+}
+
+// Listen for messages from popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'checkDomain') {
+    checkDomain(request.domain)
+      .then(result => sendResponse(result));
+    return true; // Will respond asynchronously
+  }
+}); 

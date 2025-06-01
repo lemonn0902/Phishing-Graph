@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Phishing Domain Detector</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      width: 400px;
+      padding: 20px;
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      background: #f8f9fa;
+    }
+
+    h2 {
+      margin: 0 0 20px 0;
+      color: #1a1a1a;
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .domain-container {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      margin-bottom: 20px;
+    }
+
+    .domain-label {
+      color: #666;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 5px;
+    }
+
+    .domain-value {
+      color: #1a1a1a;
+      font-size: 16px;
+      font-weight: 600;
+      word-break: break-all;
+    }
+
+    .risk-score {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .score-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    .score-value {
+      font-size: 36px;
+      font-weight: 700;
+      margin: 10px 0;
+    }
+
+    .low-risk .score-value {
+      color: #10b981;
+    }
+
+    .medium-risk .score-value {
+      color: #f59e0b;
+    }
+
+    .high-risk .score-value {
+      color: #ef4444;
+    }
+
+    .reasons {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .reason-item {
+      display: flex;
+      align-items: flex-start;
+      padding: 12px;
+      margin: 5px 0;
+      background: #f8f9fa;
+      border-radius: 6px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .reason-item:first-child {
+      background: #1a1a1a;
+      color: white;
+      font-weight: 600;
+    }
+
+    .reason-icon {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 8px;
+      font-size: 16px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: #666;
+    }
+
+    .loading-spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #3498db;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    #domainInfo {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h2>Phishing Domain Detector</h2>
+  
+  <div id="loading" class="loading">
+    <div class="loading-spinner"></div>
+    Analyzing current domain...
+  </div>
+
+  <div id="domainInfo">
+    <div class="domain-container">
+      <div class="domain-label">Domain</div>
+      <div class="domain-value" id="domain"></div>
+    </div>
+
+    <div class="risk-score">
+      <div class="score-label">RISK SCORE</div>
+      <div class="score-value">
+        <span id="riskScore">0</span>/10
+      </div>
+    </div>
+
+    <div class="reasons" id="reasons">
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html> 
