@@ -135,26 +135,52 @@ async function checkDNSRecords(domain) {
   return dnsInfo;
 }
 
+// Store redirect information
+const redirectTracker = new Map();
+
+// Listen for redirect events
+chrome.webRequest.onBeforeRedirect.addListener(
+  (details) => {
+    if (details.type === 'main_frame') {
+      const originalUrl = new URL(details.url);
+      const redirectUrl = new URL(details.redirectUrl);
+      const domain = originalUrl.hostname.replace('www.', '');
+      
+      if (!redirectTracker.has(domain)) {
+        redirectTracker.set(domain, {
+          numRedirects: 1,
+          redirectChain: [domain],
+          flagged: true,
+          timestamp: Date.now()
+        });
+      } else {
+        const info = redirectTracker.get(domain);
+        info.numRedirects++;
+        info.redirectChain.push(redirectUrl.hostname);
+        info.timestamp = Date.now();
+      }
+    }
+  },
+  { urls: ["<all_urls>"] }
+);
+
+// Clean up old redirect data every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [domain, info] of redirectTracker.entries()) {
+    if (now - info.timestamp > 5 * 60 * 1000) { // 5 minutes
+      redirectTracker.delete(domain);
+    }
+  }
+}, 5 * 60 * 1000);
+
 async function checkRedirects(domain) {
-  const redirectInfo = {
+  // Get stored redirect information
+  const redirectInfo = redirectTracker.get(domain) || {
     numRedirects: 0,
     redirectChain: [],
     flagged: false
   };
-
-  try {
-    const response = await fetch(`https://${domain}`, {
-      redirect: 'follow',
-    });
-    
-    if (response.redirected) {
-      redirectInfo.flagged = true;
-      redirectInfo.numRedirects = response.url !== `https://${domain}` ? 1 : 0;
-      redirectInfo.redirectChain = [domain, new URL(response.url).hostname];
-    }
-  } catch (error) {
-    console.error('Redirect check error:', error);
-  }
 
   return redirectInfo;
 }
@@ -263,4 +289,66 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(result => sendResponse(result));
     return true; // Will respond asynchronously
   }
-}); 
+});
+
+// Replace webNavigation listener with a more robust implementation
+chrome.webNavigation.onCommitted.addListener(
+  async (details) => {
+    // Only check main frame navigations
+    if (details.frameId !== 0) return;
+    
+    try {
+      const url = new URL(details.url);
+      const domain = url.hostname.replace('www.', '');
+      
+      // Check the domain
+      const result = await checkDomain(domain);
+      
+      // Show warning for medium (>= 4) and high risk (>= 7) sites
+      if (result.riskScore >= 4) {
+        // Ensure the tab is still valid
+        const tab = await chrome.tabs.get(details.tabId);
+        if (!tab) {
+          console.error('Tab no longer exists:', details.tabId);
+          return;
+        }
+
+        // Wait for a moment to ensure content script is ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Try to send message to content script
+        try {
+          await chrome.tabs.sendMessage(details.tabId, {
+            action: 'showWarning',
+            riskScore: result.riskScore,
+            reasons: result.reasons
+          });
+          console.log('Warning message sent successfully to tab:', details.tabId);
+        } catch (error) {
+          console.error('Failed to send message to content script, injecting script manually:', error);
+          
+          // If message fails, try to inject the content script manually
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: details.tabId },
+              files: ['content.js']
+            });
+            
+            // Try sending the message again after manual injection
+            await chrome.tabs.sendMessage(details.tabId, {
+              action: 'showWarning',
+              riskScore: result.riskScore,
+              reasons: result.reasons
+            });
+            console.log('Warning message sent after manual script injection');
+          } catch (injectionError) {
+            console.error('Failed to inject content script:', injectionError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking domain:', error);
+    }
+  },
+  { url: [{ schemes: ['http', 'https'] }] }
+); 
