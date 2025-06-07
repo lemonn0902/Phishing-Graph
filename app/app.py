@@ -100,7 +100,7 @@ def check():
 
     is_suspicious = False
     
-    # Updated thresholds and logic
+    # thresholds
     if best_match:
         is_suspicious = True
     elif risk_score >= 3.5:  # Lower threshold from 4 to 3.5
@@ -217,6 +217,34 @@ def bulk_check():
 
     return render_template('bulk_results.html', results=results)
 
+@app.route('/api/check', methods=['POST'])
+def api_check():
+    domain = request.form['url'].strip().lower()
+    domain = domain.replace('http://', '').replace('https://', '').replace('www.', '')
+    
+    # Quick legit check
+    if domain in legit_domains:
+        return jsonify({'flagged': False, 'reason': 'trusted_domain'})
+    
+    # Run all checks
+    best_match, lev, jac = get_best_match(domain, legit_domains, 8, 0.3)
+    ssl_info = fetch_ssl_info(domain)
+    whois_info = fetch_whois_info(domain)
+    dns_info = fetch_dns_info(domain)
+    risk_score, reasons = score_domain_risk(ssl_info, whois_info, dns_info)
+    entropy = calculate_entropy(domain)
+    
+    # Flag if any condition met
+    is_flagged = bool(best_match or risk_score >= 1.5 or entropy > 3.5)
+    
+    return jsonify({
+        'flagged': is_flagged,
+        'domain': domain,
+        'similarity_match': best_match,
+        'risk_score': risk_score,
+        'entropy': entropy,
+        'reasons': reasons
+    })
 
 # Cleanup Neo4j connection when app shuts down
 @app.teardown_appcontext

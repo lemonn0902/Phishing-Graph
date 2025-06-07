@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phishing Network Graph</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #2196F3;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid #333;
+        }
+
+        .phishing { background: #ff4444; }
+        .legit { background: #44ff44; }
+        .redirect { background: #ffaa44; }
+
+        #graph {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .node {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .node:hover {
+            stroke-width: 3px;
+            r: 8;
+        }
+
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+
+        .link:hover {
+            stroke-width: 3px;
+            stroke-opacity: 1;
+        }
+
+        .node-label {
+            font-size: 10px;
+            text-anchor: middle;
+            pointer-events: none;
+            font-weight: bold;
+        }
+
+        .stats-panel {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🕸️ Phishing Domain Network Graph</h1>
+        
+        <div class="stats-panel">
+            <div class="stat-item">
+                <div class="stat-number" id="total-nodes">0</div>
+                <div class="stat-label">Total Domains</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="phishing-count">0</div>
+                <div class="stat-label">Phishing Domains</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="legit-count">0</div>
+                <div class="stat-label">Legitimate Domains</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="connections">0</div>
+                <div class="stat-label">Connections</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="generateSampleData()">🔄 Generate Sample Data</button>
+            <button class="btn btn-secondary" onclick="centerGraph()">🎯 Center Graph</button>
+            <button class="btn btn-secondary" onclick="toggleLabels()">🏷️ Toggle Labels</button>
+            <label>
+                <input type="range" id="link-distance" min="30" max="200" value="80" onchange="updateLinkDistance(this.value)">
+                Link Distance
+            </label>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-dot phishing"></div>
+                <span>Phishing Domains</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot legit"></div>
+                <span>Legitimate Domains</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot redirect"></div>
+                <span>Redirect Domains</span>
+            </div>
+        </div>
+
+        <svg id="graph" width="100%" height="600"></svg>
+    </div>
+
+    <script>
+        // Graph variables
+        let svg, simulation, link, node, labels;
+        let showLabels = true;
+        const width = 1000;
+        const height = 600;
+
+        // Initialize the graph
+        function initGraph() {
+            svg = d3.select("#graph")
+                .attr("viewBox", [0, 0, width, height])
+                .call(d3.zoom().on("zoom", zoomed));
+
+            const g = svg.append("g");
+
+            // Define arrow markers for directed edges
+            svg.append("defs").selectAll("marker")
+                .data(["similar", "redirect"])
+                .join("marker")
+                .attr("id", d => d)
+                .attr("viewBox", "0 -5 10 10")
+                .attr("refX", 20)
+                .attr("refY", 0)
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
+                .attr("orient", "auto")
+                .append("path")
+                .attr("fill", d => d === "similar" ? "#ff6b6b" : "#4ecdc4")
+                .attr("d", "M0,-5L10,0L0,5");
+
+            // Create containers for links and nodes
+            link = g.append("g").selectAll(".link");
+            node = g.append("g").selectAll(".node");
+            labels = g.append("g").selectAll(".node-label");
+
+            // Initialize simulation
+            simulation = d3.forceSimulation()
+                .force("link", d3.forceLink().id(d => d.id).distance(80))
+                .force("charge", d3.forceManyBody().strength(-300))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("collision", d3.forceCollide().radius(20));
+        }
+
+        function zoomed(event) {
+            svg.select("g").attr("transform", event.transform);
+        }
+
+        function updateGraph(data) {
+            // Update statistics
+            updateStats(data);
+
+            // Update links
+            link = link.data(data.links, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+            link.exit().remove();
+            
+            const linkEnter = link.enter().append("line")
+                .attr("class", "link")
+                .attr("stroke-width", d => Math.sqrt(d.weight || 1) * 2)
+                .attr("stroke", d => {
+                    if (d.type === "similar") return "#ff6b6b";
+                    if (d.type === "redirect") return "#4ecdc4";
+                    return "#999";
+                })
+                .attr("marker-end", d => `url(#${d.type})`);
+
+            link = linkEnter.merge(link);
+
+            // Add tooltip to links
+            link.append("title").text(d => {
+                if (d.type === "similar") {
+                    return `Similarity: Levenshtein=${d.levenshtein || 'N/A'}, Jaccard=${d.jaccard || 'N/A'}`;
+                }
+                return d.type || "Connection";
+            });
+
+            // Update nodes
+            node = node.data(data.nodes, d => d.id);
+            node.exit().remove();
+
+            const nodeEnter = node.enter().append("circle")
+                .attr("class", "node")
+                .attr("r", d => Math.max(5, Math.min(15, (d.count || 1) * 2)))
+                .attr("fill", d => {
+                    if (d.type === "phishing") return "#ff4444";
+                    if (d.type === "legit") return "#44ff44";
+                    if (d.type === "redirect") return "#ffaa44";
+                    return "#cccccc";
+                })
+                .attr("stroke", "#333")
+                .attr("stroke-width", 1.5)
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended));
+
+            node = nodeEnter.merge(node);
+
+            // Add tooltips to nodes
+            node.append("title").text(d => {
+                let tooltip = `${d.id}\nType: ${d.type}\n`;
+                if (d.count) tooltip += `Attempts: ${d.count}\n`;
+                if (d.risk_score) tooltip += `Risk Score: ${d.risk_score}\n`;
+                if (d.first_seen) tooltip += `First Seen: ${new Date(d.first_seen).toLocaleDateString()}`;
+                return tooltip;
+            });
+
+            // Update labels
+            labels = labels.data(data.nodes, d => d.id);
+            labels.exit().remove();
+
+            const labelsEnter = labels.enter().append("text")
+                .attr("class", "node-label")
+                .attr("dy", -20)
+                .text(d => d.id.length > 15 ? d.id.substring(0, 12) + "..." : d.id)
+                .style("display", showLabels ? "block" : "none");
+
+            labels = labelsEnter.merge(labels);
+
+            // Update simulation
+            simulation.nodes(data.nodes);
+            simulation.force("link").links(data.links);
+            simulation.alpha(1).restart();
+        }
+
+        function updateStats(data) {
+            const phishingCount = data.nodes.filter(n => n.type === "phishing").length;
+            const legitCount = data.nodes.filter(n => n.type === "legit").length;
+            
+            document.getElementById("total-nodes").textContent = data.nodes.length;
+            document.getElementById("phishing-count").textContent = phishingCount;
+            document.getElementById("legit-count").textContent = legitCount;
+            document.getElementById("connections").textContent = data.links.length;
+        }
+
+        // Simulation tick function
+        function ticked() {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            node
+                .attr("cx", d => d.x = Math.max(20, Math.min(width - 20, d.x)))
+                .attr("cy", d => d.y = Math.max(20, Math.min(height - 20, d.y)));
+
+            labels
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+        }
+
+        // Drag functions
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // Control functions
+        function centerGraph() {
+            simulation.force("center", d3.forceCenter(width / 2, height / 2));
+            simulation.alpha(0.3).restart();
+        }
+
+        function toggleLabels() {
+            showLabels = !showLabels;
+            labels.style("display", showLabels ? "block" : "none");
+        }
+
+        function updateLinkDistance(distance) {
+            simulation.force("link").distance(distance);
+            simulation.alpha(0.3).restart();
+        }
+
+        // Generate sample data for demonstration
+        function generateSampleData() {
+            const sampleData = {
+                nodes: [
+                    {id: "google.com", type: "legit", count: 1},
+                    {id: "g00gle.com", type: "phishing", count: 3, risk_score: 8.5, first_seen: "2024-01-15"},
+                    {id: "gooogle.com", type: "phishing", count: 2, risk_score: 7.2, first_seen: "2024-01-20"},
+                    {id: "facebook.com", type: "legit", count: 1},
+                    {id: "facebok.com", type: "phishing", count: 5, risk_score: 9.1, first_seen: "2024-01-10"},
+                    {id: "amazon.com", type: "legit", count: 1},
+                    {id: "amaz0n.com", type: "phishing", count: 4, risk_score: 8.8, first_seen: "2024-01-12"},
+                    {id: "paypal.com", type: "legit", count: 1},
+                    {id: "paypaI.com", type: "phishing", count: 6, risk_score: 9.5, first_seen: "2024-01-08"},
+                    {id: "redirect1.com", type: "redirect", count: 2},
+                    {id: "redirect2.com", type: "redirect", count: 1},
+                    {id: "microsoft.com", type: "legit", count: 1},
+                    {id: "microsft.com", type: "phishing", count: 3, risk_score: 7.8, first_seen: "2024-01-18"}
+                ],
+                links: [
+                    {source: "g00gle.com", target: "google.com", type: "similar", levenshtein: 2, jaccard: 0.85, weight: 3},
+                    {source: "gooogle.com", target: "google.com", type: "similar", levenshtein: 1, jaccard: 0.92, weight: 2},
+                    {source: "facebok.com", target: "facebook.com", type: "similar", levenshtein: 1, jaccard: 0.88, weight: 4},
+                    {source: "amaz0n.com", target: "amazon.com", type: "similar", levenshtein: 1, jaccard: 0.91, weight: 3},
+                    {source: "paypaI.com", target: "paypal.com", type: "similar", levenshtein: 1, jaccard: 0.90, weight: 5},
+                    {source: "microsft.com", target: "microsoft.com", type: "similar", levenshtein: 1, jaccard: 0.89, weight: 2},
+                    {source: "g00gle.com", target: "redirect1.com", type: "redirect", weight: 1},
+                    {source: "facebok.com", target: "redirect2.com", type: "redirect", weight: 1},
+                    {source: "g00gle.com", target: "gooogle.com", type: "cluster", weight: 1}
+                ]
+            };
+
+            updateGraph(sampleData);
+        }
+
+        // Initialize everything
+        initGraph();
+        simulation.on("tick", ticked);
+        
+        // Generate sample data on load
+        generateSampleData();
+    </script>
+</body>
+</html>
