@@ -14,7 +14,7 @@ app = Flask(__name__)
 
 # Define paths
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
-LEGIT_FILE = os.path.join(DATA_DIR, 'legit_domains.txt')
+LEGIT_FILE = os.path.join(DATA_DIR, 'legit3.txt')
 
 # Load legit domains into memory in a list
 with open(LEGIT_FILE, 'r', encoding='utf-8') as f:
@@ -28,18 +28,33 @@ def jaccard_similarity(str1, str2, n=3):
     return len(set1 & set2) / len(set1 | set2) if set1 | set2 else 0
 
 def get_best_match(user_input, legit_domains, lev_thresh=2, jac_thresh=0.6):
+    # Pre-filter by length and first character
+    input_len = len(user_input)
+    first_char = user_input[0] if user_input else ''
+    
+    # Only check domains with similar length (±2) and same first character
+    candidates = [d for d in legit_domains 
+                 if abs(len(d) - input_len) <= 2 and d.startswith(first_char)]
+    
+    # If too few candidates, expand search
+    if len(candidates) < 100:
+        candidates = [d for d in legit_domains if abs(len(d) - input_len) <= 3]
+    
+    # Use original logic on filtered candidates
     best_match = None
     best_score = float('inf')
     best_lev = None
     best_jac = None
     
-    for legit in legit_domains:
+    for legit in candidates:
         lev = levenshtein_distance(user_input, legit)
+        if lev > lev_thresh:  # Early exit if too different
+            continue
+            
         jac = jaccard_similarity(user_input, legit)
         
-        # More lenient conditions for finding matches
-        if lev <= lev_thresh or jac >= jac_thresh:  # Changed AND to OR
-            score = lev - jac  # prioritize smaller edit and higher overlap
+        if lev <= lev_thresh or jac >= jac_thresh:
+            score = lev - jac
             if score < best_score:
                 best_score = score
                 best_match = legit
