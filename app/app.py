@@ -7,7 +7,7 @@ from Levenshtein import distance as levenshtein_distance
 from neo4j_utils import add_phishing_match, driver, get_phishing_history, get_phishing_statistics, test_connection
 from flask import jsonify
 from utils import fetch_ssl_info, fetch_whois_info, fetch_dns_info, score_domain_risk, check_redirect_chain
-from neo4j_utils import add_domain_metadata  
+from neo4j_utils import add_domain_metadata , get_network_enhanced_risk_score
 
 
 app = Flask(__name__)
@@ -122,7 +122,7 @@ def check():
             'jac_score': jac_score
         }
     
-    risk_score, reasons = score_domain_risk(
+    base_risk_score, base_reasons = score_domain_risk(
         ssl_info, 
         whois_info, 
         dns_info, 
@@ -130,6 +130,8 @@ def check():
         entropy_score,
         similarity_info
     )
+
+    risk_score, reasons = get_network_enhanced_risk_score(clean_input, base_risk_score, base_reasons)
 
     is_suspicious = False
     

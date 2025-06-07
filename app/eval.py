@@ -5,18 +5,16 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 def load_phishing_samples(limit=10):
     """Load phishing domains from PhishTank API"""
-    try:
-        url = "http://data.phishtank.com/data/online-valid.json"
-        response = requests.get(url, timeout=30)
-        data = response.json()
-        domains = []
-        for item in data[:limit]:
-            url_clean = item['url'].replace('http://', '').replace('https://', '').split('/')[0]
-            if '.' in url_clean and len(url_clean) < 50:  # Basic filtering
-                domains.append(url_clean)
-        return domains[:limit]
-    except:
-        return ['paypal-security.net', 'amazom.com', 'app1e.com', 'gmail-verify.org']
+    
+    url = "http://data.phishtank.com/data/online-valid.json"
+    response = requests.get(url, timeout=30)
+    data = response.json()
+    domains = []
+    for item in data[:limit]:
+        url_clean = item['url'].replace('http://', '').replace('https://', '').split('/')[0]
+        if '.' in url_clean and len(url_clean) < 50:  # Basic filtering
+            domains.append(url_clean)
+    return domains[:limit]
 
 def load_legit_samples():
     """Load legitimate domains"""

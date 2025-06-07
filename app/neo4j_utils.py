@@ -241,3 +241,108 @@ def _add_domain_metadata(tx, domain, ssl_data, whois_data):
          whois_expiration_date=whois_data.get('expiration_date'),
          whois_name_servers=str(whois_data.get('name_servers')),
          whois_status=str(whois_data.get('status')))
+
+
+def get_domain_reputation_score(domain):
+    """Check if domain is connected to known phishing domains"""
+    try:
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (p:Phishing)
+                WHERE p.domain CONTAINS $domain_part OR $domain_part CONTAINS p.domain
+                RETURN count(p) as phishing_connections
+            """, domain_part=domain)
+            
+            record = result.single()
+            if record:
+                connections = record["phishing_connections"]
+                return min(connections * 0.5, 2.0)  # Add up to 2 points to risk score
+            return 0.0
+    except Exception as e:
+        print(f"Error getting domain reputation: {e}")
+        return 0.0
+
+def check_campaign_pattern(domain):
+    """Check if domain is part of a larger phishing campaign"""
+    try:
+        with driver.session() as session:
+            # Look for domains registered around the same time with similar patterns
+            result = session.run("""
+                MATCH (p:Phishing)
+                WHERE p.domain <> $domain
+                AND (
+                    p.domain CONTAINS $domain_part OR 
+                    $domain_part CONTAINS p.domain OR
+                    p.whois_creation_date = $creation_date
+                )
+                AND p.first_seen >= datetime() - duration('P7D')
+                RETURN count(p) as similar_recent_domains, 
+                       collect(p.domain)[0..5] as example_domains
+            """, domain=domain, 
+                 domain_part=domain[:5] if len(domain) > 5 else domain,
+                 creation_date=datetime.now().strftime('%Y-%m-%d'))
+            
+            record = result.single()
+            if record and record["similar_recent_domains"] >= 2:
+                return True, f"Part of campaign with {record['similar_recent_domains']} similar domains"
+            return False, None
+    except Exception as e:
+        print(f"Error checking campaign pattern: {e}")
+        return False, None
+
+def get_redirect_network_risk(domain):
+    """Check if domain redirects to known malicious endpoints"""
+    try:
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (p:Phishing {domain: $domain})-[:REDIRECTS_TO]->(r:Redirect)
+                MATCH (other:Phishing)-[:REDIRECTS_TO]->(r)
+                WHERE other.domain <> $domain
+                RETURN count(other) as shared_redirects,
+                       collect(other.domain)[0..3] as other_domains
+            """, domain=domain)
+            
+            record = result.single()
+            if record and record["shared_redirects"] > 0:
+                return record["shared_redirects"] * 0.5, f"Redirects shared with {record['shared_redirects']} other suspicious domains"
+            return 0.0, None
+    except Exception as e:
+        print(f"Error checking redirect network: {e}")
+        return 0.0, None
+
+def get_network_enhanced_risk_score(domain, base_risk_score, reasons):
+    """Enhance risk score using graph network analysis"""
+    try:
+        network_score = 0.0
+        network_reasons = []
+        
+        # Check domain reputation
+        reputation_score = get_domain_reputation_score(domain)
+        if reputation_score > 0:
+            network_score += reputation_score
+            network_reasons.append(f"Connected to known phishing patterns (+{reputation_score})")
+        
+        # Check campaign patterns
+        is_campaign, campaign_info = check_campaign_pattern(domain)
+        if is_campaign:
+            network_score += 1.5
+            network_reasons.append(f"Campaign pattern detected: {campaign_info}")
+        
+        # Check redirect network
+        redirect_score, redirect_info = get_redirect_network_risk(domain)
+        if redirect_score > 0:
+            network_score += redirect_score
+            network_reasons.append(f"Redirect network risk: {redirect_info}")
+        
+        # Combine scores
+        enhanced_score = min(10.0, base_risk_score + network_score)
+        enhanced_reasons = reasons + network_reasons
+        
+        if network_score > 0:
+            enhanced_reasons.insert(0, f"🕸️ NETWORK ANALYSIS: +{network_score} risk points")
+        
+        return enhanced_score, enhanced_reasons
+        
+    except Exception as e:
+        print(f"Error in network analysis: {e}")
+        return base_risk_score, reasons
