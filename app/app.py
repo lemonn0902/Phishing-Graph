@@ -27,7 +27,7 @@ def jaccard_similarity(str1, str2, n=3):
     set1, set2 = ngrams(str1, n), ngrams(str2, n)
     return len(set1 & set2) / len(set1 | set2) if set1 | set2 else 0
 
-def get_best_match(user_input, legit_domains, lev_thresh=3, jac_thresh=0.8):
+def get_best_match(user_input, legit_domains, lev_thresh=2, jac_thresh=0.6):
     best_match = None
     best_score = float('inf')
     best_lev = None
@@ -37,7 +37,8 @@ def get_best_match(user_input, legit_domains, lev_thresh=3, jac_thresh=0.8):
         lev = levenshtein_distance(user_input, legit)
         jac = jaccard_similarity(user_input, legit)
         
-        if lev <= lev_thresh and jac >= jac_thresh:
+        # More lenient conditions for finding matches
+        if lev <= lev_thresh or jac >= jac_thresh:  # Changed AND to OR
             score = lev - jac  # prioritize smaller edit and higher overlap
             if score < best_score:
                 best_score = score
@@ -96,7 +97,24 @@ def check():
     whois_info = fetch_whois_info(clean_input)
     dns_info = fetch_dns_info(clean_input)
     redirect_info = check_redirect_chain(clean_input)
-    risk_score, reasons = score_domain_risk(ssl_info, whois_info, dns_info, redirect_info, entropy_score)
+    
+    # Create similarity info dictionary
+    similarity_info = None
+    if best_match:
+        similarity_info = {
+            'best_match': best_match,
+            'lev_distance': lev_distance,
+            'jac_score': jac_score
+        }
+    
+    risk_score, reasons = score_domain_risk(
+        ssl_info, 
+        whois_info, 
+        dns_info, 
+        redirect_info, 
+        entropy_score,
+        similarity_info
+    )
 
     is_suspicious = False
     

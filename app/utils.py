@@ -182,16 +182,19 @@ def check_redirect_chain(domain):
     
     return redirect_info
 
-def score_domain_risk(ssl_info, whois_info, dns_info=None, redirect_info=None, entropy=None):
+def score_domain_risk(ssl_info, whois_info, dns_info=None, redirect_info=None, entropy=None, similarity_info=None):
     """
     Calculate domain risk score on a scale of 0-10
     Returns tuple of (normalized_score, reasons)
+    
+    Parameters:
+    - similarity_info: dict containing 'best_match', 'lev_distance', 'jac_score' for domain similarity
     """
     base_score = 0
     max_score = 10
     reasons = []
 
-    # SSL Certificate Checks (25% weight)
+    # SSL Certificate Checks (20% weight)
     ssl_score = 0
     if ssl_info.get("issuer"):
         if "self" in str(ssl_info["issuer"]).lower():
@@ -214,7 +217,7 @@ def score_domain_risk(ssl_info, whois_info, dns_info=None, redirect_info=None, e
         except Exception:
             pass
 
-    # WHOIS Checks (25% weight)
+    # WHOIS Checks (20% weight)
     whois_score = 0
     if creation := whois_info.get("creation_date"):
         try:
@@ -235,7 +238,7 @@ def score_domain_risk(ssl_info, whois_info, dns_info=None, redirect_info=None, e
         whois_score += 1
         reasons.append("Registrar information unavailable (Low Risk)")
 
-    # DNS Checks (25% weight)
+    # DNS Checks (20% weight)
     dns_score = 0
     if dns_info:
         checks = [
@@ -255,7 +258,29 @@ def score_domain_risk(ssl_info, whois_info, dns_info=None, redirect_info=None, e
             dns_score += pattern_score
             reasons.extend(f"{pattern} (High Risk)" for pattern in suspicious)
 
-    # Entropy and Behavior Checks (25% weight)
+    # Similarity Score (20% weight)
+    similarity_score = 0
+    if similarity_info and similarity_info.get('best_match'):
+        lev_distance = similarity_info.get('lev_distance', 0)
+        jac_score = similarity_info.get('jac_score', 0)
+        
+        # Levenshtein distance scoring (lower is more suspicious)
+        if lev_distance <= 1:
+            similarity_score += 2.5
+            reasons.append(f"Very similar to {similarity_info['best_match']} (High Risk)")
+        elif lev_distance <= 2:
+            similarity_score += 2.0
+            reasons.append(f"Similar to {similarity_info['best_match']} (Medium Risk)")
+        
+        # Jaccard similarity scoring (higher is more suspicious)
+        if jac_score >= 0.8:
+            similarity_score += 2.5
+            reasons.append("High character pattern similarity (High Risk)")
+        elif jac_score >= 0.6:
+            similarity_score += 1.5
+            reasons.append("Medium character pattern similarity (Medium Risk)")
+
+    # Entropy and Behavior Checks (20% weight)
     behavior_score = 0
     
     # Check redirects
@@ -277,12 +302,13 @@ def score_domain_risk(ssl_info, whois_info, dns_info=None, redirect_info=None, e
             behavior_score += 1.5
             reasons.append("Medium domain entropy - unusual pattern (Medium Risk)")
 
-    # Calculate weighted scores (all components now 25%)
+    # Calculate weighted scores (all components now 20%)
     weighted_score = (
-        (ssl_score / 3) * 2.5 +      # SSL (25%)
-        (whois_score / 2.5) * 2.5 +  # WHOIS (25%)
-        (dns_score / 2.5) * 2.5 +    # DNS (25%)
-        (behavior_score / 2.5) * 2.5  # Behavior & Entropy (25%)
+        (ssl_score / 3) * 2.0 +         # SSL (20%)
+        (whois_score / 2.5) * 2.0 +     # WHOIS (20%)
+        (dns_score / 2.5) * 2.0 +       # DNS (20%)
+        (similarity_score / 2.5) * 2.0 + # Similarity (20%)
+        (behavior_score / 2.5) * 2.0     # Behavior & Entropy (20%)
     )
 
     # Normalize to 0-10 scale
