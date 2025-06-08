@@ -1,6 +1,6 @@
 // Load legitimate domains list
 let legitDomains = [];
-fetch(chrome.runtime.getURL('data/legit_domains.txt'))
+fetch(chrome.runtime.getURL('data/legit3.txt'))
   .then(response => response.text())
   .then(text => {
     legitDomains = text.split('\n').map(d => d.trim().toLowerCase()).filter(Boolean);
@@ -62,17 +62,38 @@ function jaccardSimilarity(str1, str2, n = 3) {
   return union.size ? intersection.size / union.size : 0;
 }
 
-function getBestMatch(userInput, legitDomains, levThresh = 3, jacThresh = 0.8) {
+function getBestMatch(userInput, legitDomains, levThresh = 3, jacThresh = 0.6) {
+  // Pre-filter by length and first character
+  const inputLen = userInput.length;
+  const firstChar = userInput[0] || '';
+  
+  // Only check domains with similar length (±2) and same first character
+  let candidates = legitDomains.filter(d => 
+    Math.abs(d.length - inputLen) <= 2 && 
+    d[0] === firstChar
+  );
+  
+  // If too few candidates, expand search
+  if (candidates.length < 100) {
+    candidates = legitDomains.filter(d => 
+      Math.abs(d.length - inputLen) <= 3
+    );
+  }
+  
   let bestMatch = null;
   let bestScore = Infinity;
   let bestLev = null;
   let bestJac = null;
   
-  for (const legit of legitDomains) {
+  for (const legit of candidates) {
     const lev = levenshteinDistance(userInput, legit);
+    if (lev > levThresh) {  // Early exit if too different
+      continue;
+    }
+    
     const jac = jaccardSimilarity(userInput, legit);
     
-    if (lev <= levThresh && jac >= jacThresh) {
+    if (lev <= levThresh || jac >= jacThresh) {
       const score = lev - jac;
       if (score < bestScore) {
         bestScore = score;
@@ -187,22 +208,22 @@ async function checkRedirects(domain) {
 
 async function checkDomain(domain) {
   const cleanDomain = domain.toLowerCase();
-  const entropyScore = calculateEntropy(cleanDomain);
   
-  // Initialize risk assessment with weighted components
+  // First check exact match in legit domains
+  if (legitDomains.includes(cleanDomain)) {
+    return { riskScore: 0, reasons: ["Domain is in trusted list"] };
+  }
+
+  // Then check for similar domains with optimized thresholds
+  const { bestMatch } = getBestMatch(cleanDomain, legitDomains, 3, 0.6);
+  
+  // Rest of the function remains the same...
+  const entropyScore = calculateEntropy(cleanDomain);
   let sslScore = 0;
   let dnsScore = 0;
   let behaviorScore = 0;
   const reasons = [];
   
-  // Check if domain is in legitimate list
-  if (legitDomains.includes(cleanDomain)) {
-    reasons.push("Domain is in trusted list");
-    return { riskScore: 0, reasons };
-  }
-  
-  // Check for similarity with legitimate domains (25% weight)
-  const { bestMatch } = getBestMatch(cleanDomain, legitDomains);
   if (bestMatch) {
     behaviorScore += 2.5;
     reasons.push(`Similar to legitimate domain: ${bestMatch}`);
@@ -300,6 +321,10 @@ chrome.webNavigation.onCommitted.addListener(
     try {
       const url = new URL(details.url);
       const domain = url.hostname.replace('www.', '');
+
+      if (legitDomains.includes(domain)) {
+        return;
+      }
       
       // Check the domain
       const result = await checkDomain(domain);
